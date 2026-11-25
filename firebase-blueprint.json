@@ -1,0 +1,292 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated laboratory staff profile and RBAC role assignment.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["quality_manager", "auditor", "auditee", "executive"] },
+        "department": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "isActive": { "type": "boolean" },
+        "inviteId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "department", "isActive", "createdAt", "updatedAt"]
+    },
+    "RoleInvite": {
+      "title": "RoleInvite",
+      "description": "Admin-assigned pre-registration role mapping by staff email.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["quality_manager", "auditor", "auditee", "executive"] },
+        "department": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "isActive": { "type": "boolean" },
+        "assignedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "displayName", "role", "department", "isActive", "assignedBy", "createdAt", "updatedAt"]
+    },
+    "AuditProgramItem": {
+      "title": "AuditProgramItem",
+      "description": "FM-LB-023 Annual Internal Quality Audit Program row.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "yearBE": { "type": "number" },
+        "sequence": { "type": "number" },
+        "activity": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "activityType": { "type": "string", "enum": ["testing", "calibration", "management"] },
+        "months": { "type": "array", "description": "12-month boolean flags Jan-Dec" },
+        "remarks": { "type": "string", "maxLength": 500 },
+        "preparedBy": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "preparedDate": { "type": "string", "maxLength": 32 },
+        "approvedBy": { "type": "string", "maxLength": 120 },
+        "approvedDate": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["draft", "approved"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["yearBE", "sequence", "activity", "activityType", "months", "preparedBy", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "AuditScheduleItem": {
+      "title": "AuditScheduleItem",
+      "description": "FM-LB-022 Internal Quality Audit Schedule entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "auditRound": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "yearBE": { "type": "number" },
+        "auditDate": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "timeRange": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "activity": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "activityType": { "type": "string", "enum": ["testing", "calibration", "management"] },
+        "criteria": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "auditorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "auditeeName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["planned", "in_progress", "completed", "rescheduled"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["auditRound", "yearBE", "auditDate", "timeRange", "activity", "activityType", "criteria", "auditorName", "auditeeName", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "AuditChecklistItem": {
+      "title": "AuditChecklistItem",
+      "description": "FM-LB-024 Internal Audit Checklist finding record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "auditRound": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "yearBE": { "type": "number" },
+        "department": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "activity": { "type": "string", "minLength": 1, "maxLength": 250 },
+        "activityType": { "type": "string", "enum": ["testing", "calibration", "management"] },
+        "auditMethod": { "type": "string", "enum": ["horizontal", "vertical", "witness"] },
+        "auditDate": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "sequence": { "type": "number" },
+        "clause": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "checkItem": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "result": { "type": "string", "enum": ["C", "CAR", "NC", "OB"] },
+        "detail": { "type": "string", "maxLength": 1500 },
+        "remarks": { "type": "string", "maxLength": 500 },
+        "auditorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "auditeeName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "linkedDocNo": { "type": "string", "maxLength": 64 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["auditRound", "yearBE", "department", "activity", "activityType", "auditMethod", "auditDate", "sequence", "clause", "checkItem", "result", "auditorName", "auditeeName", "createdBy", "createdAt", "updatedAt"]
+    },
+    "CarRecord": {
+      "title": "CarRecord",
+      "description": "FM-LB-011 & FM-LB-012 Corrective Action Request (CAR) and Nonconforming Work (NC) record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "carNo": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "recordType": { "type": "string", "enum": ["CAR", "NC"] },
+        "sourceType": { "type": "string", "enum": ["internal_audit", "management_review", "external_audit", "complaint", "staff_observation", "other"] },
+        "sourceRef": { "type": "string", "maxLength": 120 },
+        "part1Detail": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "clause": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "activityType": { "type": "string", "enum": ["testing", "calibration", "management"] },
+        "finderName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "foundDate": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "expansionHasIssue": { "type": "boolean" },
+        "expansionCause": { "type": "string", "maxLength": 600 },
+        "rootCause": { "type": "string", "maxLength": 1500 },
+        "impactHasEffect": { "type": "boolean" },
+        "impactDetail": { "type": "string", "maxLength": 1000 },
+        "riskLikelihood": { "type": "number" },
+        "riskSeverity": { "type": "number" },
+        "riskScore": { "type": "number" },
+        "riskFm17Required": { "type": "boolean" },
+        "correctiveAction": { "type": "string", "maxLength": 1500 },
+        "correctiveDueDate": { "type": "string", "maxLength": 32 },
+        "preventiveAction": { "type": "string", "maxLength": 1500 },
+        "preventiveDueDate": { "type": "string", "maxLength": 32 },
+        "responseDueDate": { "type": "string", "maxLength": 32 },
+        "extensionCount": { "type": "number" },
+        "responsiblePerson": { "type": "string", "maxLength": 120 },
+        "verificationResult": { "type": "string", "enum": ["pending", "effective", "ineffective"] },
+        "verificationDetail": { "type": "string", "maxLength": 1000 },
+        "linkedNewCarNo": { "type": "string", "maxLength": 40 },
+        "linkedParentCarNo": { "type": "string", "maxLength": 40 },
+        "verifierName": { "type": "string", "maxLength": 120 },
+        "verifyDate": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["open", "responded", "closed", "reissued"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["carNo", "recordType", "sourceType", "part1Detail", "clause", "activityType", "finderName", "foundDate", "verificationResult", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "ParRecord": {
+      "title": "ParRecord",
+      "description": "FM-LB-013 & FM-LB-014 Preventive Action Request (PAR) record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "parNo": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "sourceType": { "type": "string", "enum": ["internal_audit", "management_review", "external_audit", "complaint", "staff_observation", "other"] },
+        "sourceRef": { "type": "string", "maxLength": 120 },
+        "clause": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "activityType": { "type": "string", "enum": ["testing", "calibration", "management"] },
+        "part1Detail": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "proposerName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "proposedDate": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "preventiveAction": { "type": "string", "maxLength": 1500 },
+        "expectedDueDate": { "type": "string", "maxLength": 32 },
+        "responsiblePerson": { "type": "string", "maxLength": 120 },
+        "verificationResult": { "type": "string", "enum": ["pending", "effective", "ineffective"] },
+        "verificationDetail": { "type": "string", "maxLength": 1000 },
+        "linkedNewParNo": { "type": "string", "maxLength": 40 },
+        "linkedParentParNo": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "enum": ["open", "responded", "closed", "reissued"] },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["parNo", "sourceType", "clause", "activityType", "part1Detail", "proposerName", "proposedDate", "verificationResult", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "EquipmentItem": {
+      "title": "EquipmentItem",
+      "description": "ISO/IEC 17025 Clause 6.4/6.5/7.7 Equipment and Process Compliance item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "code": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "category": { "type": "string", "enum": ["testing", "calibration", "environment"] },
+        "clause": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "department": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "lastCalDate": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "nextCalDate": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "nominalValue": { "type": "number" },
+        "tolerance": { "type": "number" },
+        "lastMeasuredValue": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "ptZScore": { "type": "number" },
+        "status": { "type": "string", "enum": ["compliant", "warning", "non_compliant"] },
+        "remarks": { "type": "string", "maxLength": 500 },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "name", "category", "clause", "department", "lastCalDate", "nextCalDate", "nominalValue", "tolerance", "lastMeasuredValue", "unit", "status", "updatedBy", "createdAt", "updatedAt"]
+    },
+    "DeviationAlert": {
+      "title": "DeviationAlert",
+      "description": "Real-time threshold deviation alert for calibration, uncertainty drift, environment, or overdue CAR.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "alertCode": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "category": { "type": "string", "enum": ["equipment_calibration", "measurement_drift", "environmental", "car_overdue", "audit_nc"] },
+        "severity": { "type": "string", "enum": ["critical", "warning"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 800 },
+        "clause": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "relatedCode": { "type": "string", "maxLength": 64 },
+        "measuredValue": { "type": "string", "maxLength": 64 },
+        "thresholdValue": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["active", "acknowledged", "resolved"] },
+        "acknowledgedBy": { "type": "string", "maxLength": 120 },
+        "resolvedCarNo": { "type": "string", "maxLength": 40 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["alertCode", "category", "severity", "title", "description", "clause", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "AuditTrailEntry": {
+      "title": "AuditTrailEntry",
+      "description": "Immutable traceability log entry per ISO/IEC 17025 Clause 7.5 and 8.4.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "actorRole": { "type": "string", "enum": ["quality_manager", "auditor", "auditee", "executive"] },
+        "action": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "targetCollection": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "targetCode": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorUid", "actorName", "actorRole", "action", "targetCollection", "targetCode", "summary", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Laboratory user profiles and RBAC role assignments"
+    },
+    "/roleInvites/{inviteId}": {
+      "schema": { "$ref": "#/entities/RoleInvite" },
+      "description": "Admin pre-assigned role records matched by email on first Google sign-in"
+    },
+    "/auditPrograms/{programId}": {
+      "schema": { "$ref": "#/entities/AuditProgramItem" },
+      "description": "FM-LB-023 Annual Internal Quality Audit Program items"
+    },
+    "/auditSchedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/AuditScheduleItem" },
+      "description": "FM-LB-022 Internal Quality Audit Schedule entries"
+    },
+    "/auditChecklists/{checklistId}": {
+      "schema": { "$ref": "#/entities/AuditChecklistItem" },
+      "description": "FM-LB-024 Audit Checklist items and findings"
+    },
+    "/carRecords/{carId}": {
+      "schema": { "$ref": "#/entities/CarRecord" },
+      "description": "FM-LB-011 and FM-LB-012 CAR/NC records"
+    },
+    "/parRecords/{parId}": {
+      "schema": { "$ref": "#/entities/ParRecord" },
+      "description": "FM-LB-013 and FM-LB-014 PAR records"
+    },
+    "/equipment/{equipmentId}": {
+      "schema": { "$ref": "#/entities/EquipmentItem" },
+      "description": "Equipment calibration and process compliance items"
+    },
+    "/deviationAlerts/{alertId}": {
+      "schema": { "$ref": "#/entities/DeviationAlert" },
+      "description": "Deviation alerts generated from out-of-spec or overdue conditions"
+    },
+    "/auditTrail/{trailId}": {
+      "schema": { "$ref": "#/entities/AuditTrailEntry" },
+      "description": "Append-only immutable traceability audit trail"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "ISO/IEC 17025 Internal Quality Audit & Compliance System",
+  "description": "ระบบตรวจติดตามคุณภาพภายใน ISO/IEC 17025:2017 ครอบคลุมกิจกรรมการทดสอบและการสอบเทียบ พร้อมรายงาน FM-LB-011 ถึง FM-LB-025 การวิเคราะห์แนวโน้ม แจ้งเตือนค่าเบี่ยงเบน และสิทธิ์ผู้ใช้งานบนคลาวด์",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

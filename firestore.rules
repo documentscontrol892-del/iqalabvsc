@@ -1,0 +1,529 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny all paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Shared Hardened Primitives ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && request.auth.token.email == 'documentscontrol892@gmail.com';
+    }
+
+    function userDocExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userRole() {
+      return userDocExists()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : '';
+    }
+
+    function isUserActive() {
+      return isBootstrappedAdmin() || (
+        userDocExists() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true
+      );
+    }
+
+    function isQualityManager() {
+      return isBootstrappedAdmin() || (isSignedIn() && isUserActive() && userRole() == 'quality_manager');
+    }
+
+    function isAuditor() {
+      return isSignedIn() && isUserActive() && (userRole() == 'auditor' || isQualityManager());
+    }
+
+    function isExecutive() {
+      return isSignedIn() && isUserActive() && userRole() == 'executive';
+    }
+
+    function isStaff() {
+      return isBootstrappedAdmin() || (
+        isSignedIn() && isUserActive() &&
+        userRole() in ['quality_manager', 'auditor', 'auditee', 'executive']
+      );
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'department', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'department', 'isActive', 'inviteId', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.role in ['quality_manager', 'auditor', 'auditee', 'executive']
+        && data.department is string && data.department.size() >= 1 && data.department.size() <= 120
+        && data.isActive is bool
+        && (!('inviteId' in data) || isValidId(data.inviteId))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRoleInvite(data) {
+      return data.keys().hasAll(['email', 'displayName', 'role', 'department', 'isActive', 'assignedBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['email', 'displayName', 'role', 'department', 'isActive', 'assignedBy', 'createdAt', 'updatedAt'])
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.role in ['quality_manager', 'auditor', 'auditee', 'executive']
+        && data.department is string && data.department.size() >= 1 && data.department.size() <= 120
+        && data.isActive is bool
+        && isValidId(data.assignedBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuditProgram(data) {
+      return data.keys().hasAll(['yearBE', 'sequence', 'activity', 'activityType', 'months', 'preparedBy', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['yearBE', 'sequence', 'activity', 'activityType', 'months', 'remarks', 'preparedBy', 'preparedDate', 'approvedBy', 'approvedDate', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.yearBE is int && data.yearBE >= 2560 && data.yearBE <= 2700
+        && data.sequence is int && data.sequence >= 1 && data.sequence <= 500
+        && data.activity is string && data.activity.size() >= 1 && data.activity.size() <= 300
+        && data.activityType in ['testing', 'calibration', 'management']
+        && data.months is list && data.months.size() == 12 && data.months[0] is bool
+        && (!('remarks' in data) || (data.remarks is string && data.remarks.size() <= 500))
+        && data.preparedBy is string && data.preparedBy.size() >= 1 && data.preparedBy.size() <= 120
+        && (!('preparedDate' in data) || (data.preparedDate is string && data.preparedDate.size() <= 32))
+        && (!('approvedBy' in data) || (data.approvedBy is string && data.approvedBy.size() <= 120))
+        && (!('approvedDate' in data) || (data.approvedDate is string && data.approvedDate.size() <= 32))
+        && data.status in ['draft', 'approved']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuditSchedule(data) {
+      return data.keys().hasAll(['auditRound', 'yearBE', 'auditDate', 'timeRange', 'activity', 'activityType', 'criteria', 'auditorName', 'auditeeName', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['auditRound', 'yearBE', 'auditDate', 'timeRange', 'activity', 'activityType', 'criteria', 'auditorName', 'auditeeName', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.auditRound is string && data.auditRound.size() >= 1 && data.auditRound.size() <= 32
+        && data.yearBE is int && data.yearBE >= 2560 && data.yearBE <= 2700
+        && data.auditDate is string && data.auditDate.size() >= 1 && data.auditDate.size() <= 32
+        && data.timeRange is string && data.timeRange.size() >= 1 && data.timeRange.size() <= 40
+        && data.activity is string && data.activity.size() >= 1 && data.activity.size() <= 300
+        && data.activityType in ['testing', 'calibration', 'management']
+        && data.criteria is string && data.criteria.size() >= 1 && data.criteria.size() <= 300
+        && data.auditorName is string && data.auditorName.size() >= 1 && data.auditorName.size() <= 120
+        && data.auditeeName is string && data.auditeeName.size() >= 1 && data.auditeeName.size() <= 120
+        && data.status in ['planned', 'in_progress', 'completed', 'rescheduled']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuditChecklist(data) {
+      return data.keys().hasAll(['auditRound', 'yearBE', 'department', 'activity', 'activityType', 'auditMethod', 'auditDate', 'sequence', 'clause', 'checkItem', 'result', 'auditorName', 'auditeeName', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['auditRound', 'yearBE', 'department', 'activity', 'activityType', 'auditMethod', 'auditDate', 'sequence', 'clause', 'checkItem', 'result', 'detail', 'remarks', 'auditorName', 'auditeeName', 'linkedDocNo', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.auditRound is string && data.auditRound.size() >= 1 && data.auditRound.size() <= 32
+        && data.yearBE is int && data.yearBE >= 2560 && data.yearBE <= 2700
+        && data.department is string && data.department.size() >= 1 && data.department.size() <= 160
+        && data.activity is string && data.activity.size() >= 1 && data.activity.size() <= 250
+        && data.activityType in ['testing', 'calibration', 'management']
+        && data.auditMethod in ['horizontal', 'vertical', 'witness']
+        && data.auditDate is string && data.auditDate.size() >= 1 && data.auditDate.size() <= 32
+        && data.sequence is int && data.sequence >= 1 && data.sequence <= 1000
+        && data.clause is string && data.clause.size() >= 1 && data.clause.size() <= 20
+        && data.checkItem is string && data.checkItem.size() >= 1 && data.checkItem.size() <= 500
+        && data.result in ['C', 'CAR', 'NC', 'OB']
+        && (!('detail' in data) || (data.detail is string && data.detail.size() <= 1500))
+        && (!('remarks' in data) || (data.remarks is string && data.remarks.size() <= 500))
+        && data.auditorName is string && data.auditorName.size() >= 1 && data.auditorName.size() <= 120
+        && data.auditeeName is string && data.auditeeName.size() >= 1 && data.auditeeName.size() <= 120
+        && (!('linkedDocNo' in data) || (data.linkedDocNo is string && data.linkedDocNo.size() <= 64))
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCarRecord(data) {
+      return data.keys().hasAll(['carNo', 'recordType', 'sourceType', 'part1Detail', 'clause', 'activityType', 'finderName', 'foundDate', 'verificationResult', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'carNo', 'recordType', 'sourceType', 'sourceRef', 'part1Detail', 'clause', 'activityType',
+          'finderName', 'foundDate', 'expansionHasIssue', 'expansionCause', 'rootCause',
+          'impactHasEffect', 'impactDetail', 'riskLikelihood', 'riskSeverity', 'riskScore', 'riskFm17Required',
+          'correctiveAction', 'correctiveDueDate', 'preventiveAction', 'preventiveDueDate',
+          'responseDueDate', 'extensionCount', 'responsiblePerson',
+          'verificationResult', 'verificationDetail', 'linkedNewCarNo', 'linkedParentCarNo',
+          'verifierName', 'verifyDate', 'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.carNo is string && data.carNo.size() >= 1 && data.carNo.size() <= 40
+        && data.recordType in ['CAR', 'NC']
+        && data.sourceType in ['internal_audit', 'management_review', 'external_audit', 'complaint', 'staff_observation', 'other']
+        && (!('sourceRef' in data) || (data.sourceRef is string && data.sourceRef.size() <= 120))
+        && data.part1Detail is string && data.part1Detail.size() >= 1 && data.part1Detail.size() <= 2000
+        && data.clause is string && data.clause.size() >= 1 && data.clause.size() <= 20
+        && data.activityType in ['testing', 'calibration', 'management']
+        && data.finderName is string && data.finderName.size() >= 1 && data.finderName.size() <= 120
+        && data.foundDate is string && data.foundDate.size() >= 1 && data.foundDate.size() <= 32
+        && (!('expansionHasIssue' in data) || data.expansionHasIssue is bool)
+        && (!('expansionCause' in data) || (data.expansionCause is string && data.expansionCause.size() <= 600))
+        && (!('rootCause' in data) || (data.rootCause is string && data.rootCause.size() <= 1500))
+        && (!('impactHasEffect' in data) || data.impactHasEffect is bool)
+        && (!('impactDetail' in data) || (data.impactDetail is string && data.impactDetail.size() <= 1000))
+        && (!('riskLikelihood' in data) || (data.riskLikelihood is int && data.riskLikelihood >= 1 && data.riskLikelihood <= 4))
+        && (!('riskSeverity' in data) || (data.riskSeverity is int && data.riskSeverity >= 1 && data.riskSeverity <= 4))
+        && (!('riskScore' in data) || (data.riskScore is int && data.riskScore >= 1 && data.riskScore <= 16))
+        && (!('riskFm17Required' in data) || data.riskFm17Required is bool)
+        && (!('correctiveAction' in data) || (data.correctiveAction is string && data.correctiveAction.size() <= 1500))
+        && (!('correctiveDueDate' in data) || (data.correctiveDueDate is string && data.correctiveDueDate.size() <= 32))
+        && (!('preventiveAction' in data) || (data.preventiveAction is string && data.preventiveAction.size() <= 1500))
+        && (!('preventiveDueDate' in data) || (data.preventiveDueDate is string && data.preventiveDueDate.size() <= 32))
+        && (!('responseDueDate' in data) || (data.responseDueDate is string && data.responseDueDate.size() <= 32))
+        && (!('extensionCount' in data) || (data.extensionCount is int && data.extensionCount >= 0 && data.extensionCount <= 2))
+        && (!('responsiblePerson' in data) || (data.responsiblePerson is string && data.responsiblePerson.size() <= 120))
+        && data.verificationResult in ['pending', 'effective', 'ineffective']
+        && (!('verificationDetail' in data) || (data.verificationDetail is string && data.verificationDetail.size() <= 1000))
+        && (!('linkedNewCarNo' in data) || (data.linkedNewCarNo is string && data.linkedNewCarNo.size() <= 40))
+        && (!('linkedParentCarNo' in data) || (data.linkedParentCarNo is string && data.linkedParentCarNo.size() <= 40))
+        && (!('verifierName' in data) || (data.verifierName is string && data.verifierName.size() <= 120))
+        && (!('verifyDate' in data) || (data.verifyDate is string && data.verifyDate.size() <= 32))
+        && data.status in ['open', 'responded', 'closed', 'reissued']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidParRecord(data) {
+      return data.keys().hasAll(['parNo', 'sourceType', 'clause', 'activityType', 'part1Detail', 'proposerName', 'proposedDate', 'verificationResult', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'parNo', 'sourceType', 'sourceRef', 'clause', 'activityType', 'part1Detail',
+          'proposerName', 'proposedDate', 'preventiveAction', 'expectedDueDate',
+          'responsiblePerson', 'verificationResult', 'verificationDetail',
+          'linkedNewParNo', 'linkedParentParNo', 'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.parNo is string && data.parNo.size() >= 1 && data.parNo.size() <= 40
+        && data.sourceType in ['internal_audit', 'management_review', 'external_audit', 'complaint', 'staff_observation', 'other']
+        && (!('sourceRef' in data) || (data.sourceRef is string && data.sourceRef.size() <= 120))
+        && data.clause is string && data.clause.size() >= 1 && data.clause.size() <= 20
+        && data.activityType in ['testing', 'calibration', 'management']
+        && data.part1Detail is string && data.part1Detail.size() >= 1 && data.part1Detail.size() <= 2000
+        && data.proposerName is string && data.proposerName.size() >= 1 && data.proposerName.size() <= 120
+        && data.proposedDate is string && data.proposedDate.size() >= 1 && data.proposedDate.size() <= 32
+        && (!('preventiveAction' in data) || (data.preventiveAction is string && data.preventiveAction.size() <= 1500))
+        && (!('expectedDueDate' in data) || (data.expectedDueDate is string && data.expectedDueDate.size() <= 32))
+        && (!('responsiblePerson' in data) || (data.responsiblePerson is string && data.responsiblePerson.size() <= 120))
+        && data.verificationResult in ['pending', 'effective', 'ineffective']
+        && (!('verificationDetail' in data) || (data.verificationDetail is string && data.verificationDetail.size() <= 1000))
+        && (!('linkedNewParNo' in data) || (data.linkedNewParNo is string && data.linkedNewParNo.size() <= 40))
+        && (!('linkedParentParNo' in data) || (data.linkedParentParNo is string && data.linkedParentParNo.size() <= 40))
+        && data.status in ['open', 'responded', 'closed', 'reissued']
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEquipment(data) {
+      return data.keys().hasAll(['code', 'name', 'category', 'clause', 'department', 'lastCalDate', 'nextCalDate', 'nominalValue', 'tolerance', 'lastMeasuredValue', 'unit', 'status', 'updatedBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['code', 'name', 'category', 'clause', 'department', 'lastCalDate', 'nextCalDate', 'nominalValue', 'tolerance', 'lastMeasuredValue', 'unit', 'ptZScore', 'status', 'remarks', 'updatedBy', 'createdAt', 'updatedAt'])
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 40
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 200
+        && data.category in ['testing', 'calibration', 'environment']
+        && data.clause is string && data.clause.size() >= 1 && data.clause.size() <= 20
+        && data.department is string && data.department.size() >= 1 && data.department.size() <= 120
+        && data.lastCalDate is string && data.lastCalDate.size() >= 1 && data.lastCalDate.size() <= 32
+        && data.nextCalDate is string && data.nextCalDate.size() >= 1 && data.nextCalDate.size() <= 32
+        && data.nominalValue is number
+        && data.tolerance is number && data.tolerance >= 0
+        && data.lastMeasuredValue is number
+        && data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 32
+        && (!('ptZScore' in data) || data.ptZScore is number)
+        && data.status in ['compliant', 'warning', 'non_compliant']
+        && (!('remarks' in data) || (data.remarks is string && data.remarks.size() <= 500))
+        && isValidId(data.updatedBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDeviationAlert(data) {
+      return data.keys().hasAll(['alertCode', 'category', 'severity', 'title', 'description', 'clause', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['alertCode', 'category', 'severity', 'title', 'description', 'clause', 'relatedCode', 'measuredValue', 'thresholdValue', 'status', 'acknowledgedBy', 'resolvedCarNo', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.alertCode is string && data.alertCode.size() >= 1 && data.alertCode.size() <= 40
+        && data.category in ['equipment_calibration', 'measurement_drift', 'environmental', 'car_overdue', 'audit_nc']
+        && data.severity in ['critical', 'warning']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 800
+        && data.clause is string && data.clause.size() >= 1 && data.clause.size() <= 20
+        && (!('relatedCode' in data) || (data.relatedCode is string && data.relatedCode.size() <= 64))
+        && (!('measuredValue' in data) || (data.measuredValue is string && data.measuredValue.size() <= 64))
+        && (!('thresholdValue' in data) || (data.thresholdValue is string && data.thresholdValue.size() <= 64))
+        && data.status in ['active', 'acknowledged', 'resolved']
+        && (!('acknowledgedBy' in data) || (data.acknowledgedBy is string && data.acknowledgedBy.size() <= 120))
+        && (!('resolvedCarNo' in data) || (data.resolvedCarNo is string && data.resolvedCarNo.size() <= 40))
+        && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuditTrail(data) {
+      return data.keys().hasAll(['actorUid', 'actorName', 'actorRole', 'action', 'targetCollection', 'targetCode', 'summary', 'createdAt'])
+        && data.keys().hasOnly(['actorUid', 'actorName', 'actorRole', 'action', 'targetCollection', 'targetCode', 'summary', 'createdAt'])
+        && isValidId(data.actorUid)
+        && data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 120
+        && data.actorRole in ['quality_manager', 'auditor', 'auditee', 'executive']
+        && data.action is string && data.action.size() >= 1 && data.action.size() <= 100
+        && data.targetCollection is string && data.targetCollection.size() >= 1 && data.targetCollection.size() <= 64
+        && data.targetCode is string && data.targetCode.size() >= 1 && data.targetCode.size() <= 64
+        && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 500
+        && data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Users (PII Isolated: email only readable by owner or Quality Manager)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (request.auth.uid == userId || isQualityManager());
+      allow list: if isQualityManager();
+      allow create: if isValidId(userId) && isSignedIn()
+        && isValidUserProfile(incoming())
+        && incoming().uid == userId
+        && incoming().uid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (isBootstrappedAdmin() && incoming().role == 'quality_manager') ||
+          (!isBootstrappedAdmin() && 'inviteId' in incoming()
+            && exists(/databases/$(database)/documents/roleInvites/$(incoming().inviteId))
+            && get(/databases/$(database)/documents/roleInvites/$(incoming().inviteId)).data.email == request.auth.token.email.lower()
+            && get(/databases/$(database)/documents/roleInvites/$(incoming().inviteId)).data.isActive == true
+            && incoming().role == get(/databases/$(database)/documents/roleInvites/$(incoming().inviteId)).data.role
+            && incoming().isActive == true) ||
+          (!isBootstrappedAdmin() && !('inviteId' in incoming()) && incoming().role == 'auditee' && incoming().isActive == true)
+        );
+      allow update: if isValidId(userId) && isSignedIn()
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isQualityManager() && request.auth.uid != userId && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'department', 'isActive', 'displayName', 'updatedAt'])) ||
+          (request.auth.uid == userId && incoming().role == existing().role && incoming().isActive == existing().isActive && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'department', 'updatedAt']))
+        );
+      allow delete: if isValidId(userId) && isQualityManager() && request.auth.uid != userId;
+    }
+
+    // 1b. Admin Pre-Assigned Role Invites
+    match /roleInvites/{inviteId} {
+      allow get: if isValidId(inviteId) && isSignedIn() && (isQualityManager() || resource.data.email == request.auth.token.email.lower());
+      allow list: if isSignedIn() && (
+        resource.data.email == request.auth.token.email.lower() ||
+        (isQualityManager() && resource.data.role in ['quality_manager', 'auditor', 'auditee', 'executive'])
+      );
+      allow create: if isValidId(inviteId) && isQualityManager()
+        && isValidRoleInvite(incoming())
+        && incoming().assignedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(inviteId) && isQualityManager()
+        && isValidRoleInvite(incoming())
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'department', 'isActive', 'assignedBy', 'updatedAt']);
+      allow delete: if isValidId(inviteId) && isQualityManager();
+    }
+
+    // 2. Audit Programs (FM-LB-023)
+    match /auditPrograms/{programId} {
+      allow get: if isValidId(programId) && isStaff();
+      allow list: if isStaff() && resource.data.yearBE >= 2560;
+      allow create: if isValidId(programId) && isQualityManager()
+        && isValidAuditProgram(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(programId)
+        && isValidAuditProgram(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isQualityManager() ||
+          (isExecutive() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'approvedBy', 'approvedDate', 'updatedAt']))
+        );
+      allow delete: if isValidId(programId) && isQualityManager();
+    }
+
+    // 3. Audit Schedules (FM-LB-022)
+    match /auditSchedules/{scheduleId} {
+      allow get: if isValidId(scheduleId) && isStaff();
+      allow list: if isStaff() && resource.data.yearBE >= 2560;
+      allow create: if isValidId(scheduleId) && isQualityManager()
+        && isValidAuditSchedule(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(scheduleId)
+        && isValidAuditSchedule(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isQualityManager() ||
+          (isAuditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if isValidId(scheduleId) && isQualityManager();
+    }
+
+    // 4. Audit Checklists (FM-LB-024)
+    match /auditChecklists/{checklistId} {
+      allow get: if isValidId(checklistId) && isStaff();
+      allow list: if isStaff() && resource.data.yearBE >= 2560;
+      allow create: if isValidId(checklistId) && isAuditor()
+        && isValidAuditChecklist(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(checklistId) && isAuditor()
+        && isValidAuditChecklist(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isQualityManager() ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['result', 'detail', 'remarks', 'linkedDocNo', 'updatedAt'])
+        );
+      allow delete: if isValidId(checklistId) && isQualityManager();
+    }
+
+    // 5. CAR / NC Records (FM-LB-011 & FM-LB-012)
+    match /carRecords/{carId} {
+      allow get: if isValidId(carId) && isStaff();
+      allow list: if isStaff() && resource.data.recordType in ['CAR', 'NC'];
+      allow create: if isValidId(carId) && isAuditor()
+        && isValidCarRecord(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (incoming().status == 'open' && incoming().verificationResult == 'pending') ||
+          isQualityManager()
+        );
+      allow update: if isValidId(carId) && isStaff()
+        && isValidCarRecord(incoming())
+        && incoming().carNo == existing().carNo
+        && incoming().recordType == existing().recordType
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isQualityManager() ||
+          (existing().status != 'closed' && existing().status != 'reissued' && (
+            (incoming().status == 'responded' && incoming().verificationResult == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly([
+              'expansionHasIssue', 'expansionCause', 'rootCause', 'impactHasEffect', 'impactDetail',
+              'riskLikelihood', 'riskSeverity', 'riskScore', 'riskFm17Required',
+              'correctiveAction', 'correctiveDueDate', 'preventiveAction', 'preventiveDueDate',
+              'extensionCount', 'responsiblePerson', 'verificationResult', 'status', 'updatedAt'
+            ])) ||
+            (isAuditor() && incoming().status in ['closed', 'reissued'] && incoming().diff(existing()).affectedKeys().hasOnly([
+              'verificationResult', 'verificationDetail', 'linkedNewCarNo', 'verifierName', 'verifyDate', 'status', 'updatedAt'
+            ]))
+          ))
+        );
+      allow delete: if isValidId(carId) && isQualityManager();
+    }
+
+    // 6. PAR Records (FM-LB-013 & FM-LB-014)
+    match /parRecords/{parId} {
+      allow get: if isValidId(parId) && isStaff();
+      allow list: if isStaff() && resource.data.status in ['open', 'responded', 'closed', 'reissued'];
+      allow create: if isValidId(parId) && isAuditor()
+        && isValidParRecord(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (incoming().status == 'open' && incoming().verificationResult == 'pending') ||
+          isQualityManager()
+        );
+      allow update: if isValidId(parId) && isStaff()
+        && isValidParRecord(incoming())
+        && incoming().parNo == existing().parNo
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isQualityManager() ||
+          (existing().status != 'closed' && existing().status != 'reissued' && (
+            (incoming().status == 'responded' && incoming().verificationResult == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly([
+              'preventiveAction', 'expectedDueDate', 'responsiblePerson', 'verificationResult', 'status', 'updatedAt'
+            ])) ||
+            (isAuditor() && incoming().status in ['closed', 'reissued'] && incoming().diff(existing()).affectedKeys().hasOnly([
+              'verificationResult', 'verificationDetail', 'linkedNewParNo', 'status', 'updatedAt'
+            ]))
+          ))
+        );
+      allow delete: if isValidId(parId) && isQualityManager();
+    }
+
+    // 7. Equipment & Process Compliance (Clause 6.4 / 6.5 / 7.7)
+    match /equipment/{equipmentId} {
+      allow get: if isValidId(equipmentId) && isStaff();
+      allow list: if isStaff() && resource.data.category in ['testing', 'calibration', 'environment'];
+      allow create: if isValidId(equipmentId) && isAuditor()
+        && isValidEquipment(incoming())
+        && incoming().updatedBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(equipmentId) && isStaff()
+        && isValidEquipment(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time
+        && (
+          isQualityManager() ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['lastCalDate', 'nextCalDate', 'lastMeasuredValue', 'ptZScore', 'status', 'remarks', 'updatedBy', 'updatedAt'])
+        );
+      allow delete: if isValidId(equipmentId) && isQualityManager();
+    }
+
+    // 8. Deviation Alerts
+    match /deviationAlerts/{alertId} {
+      allow get: if isValidId(alertId) && isStaff();
+      allow list: if isStaff() && resource.data.status in ['active', 'acknowledged', 'resolved'];
+      allow create: if isValidId(alertId) && isStaff()
+        && isValidDeviationAlert(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(alertId) && isStaff()
+        && isValidDeviationAlert(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isQualityManager() ||
+          (existing().status != 'resolved' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'acknowledgedBy', 'resolvedCarNo', 'updatedAt']))
+        );
+      allow delete: if isValidId(alertId) && isQualityManager();
+    }
+
+    // 9. Immutable Audit Trail (ISO/IEC 17025 Traceability)
+    match /auditTrail/{trailId} {
+      allow get: if isValidId(trailId) && isStaff();
+      allow list: if isStaff() && resource.data.actorRole in ['quality_manager', 'auditor', 'auditee', 'executive'];
+      allow create: if isValidId(trailId) && isStaff()
+        && isValidAuditTrail(incoming())
+        && incoming().actorUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}
